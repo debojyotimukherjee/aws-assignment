@@ -21,7 +21,7 @@ Resources:
         - Key: Name
           Value: !Sub '${environment}-vpc'
 
-  AWSAssignmentPublicSubnetA:
+  AWSAssignmentSubnet:
     Type: AWS::EC2::Subnet
     Properties:
       AvailabilityZone: !Select
@@ -33,49 +33,7 @@ Resources:
       VpcId: !Ref AWSAssignmentVPC
       Tags:
         - Key: Name
-          Value: !Sub '${environment}-public-subnet-a'
-
-  AWSAssignmentPrivateSubnetA:
-    Type: AWS::EC2::Subnet
-    Properties:
-      AvailabilityZone: !Select
-        - 0
-        - !GetAZs
-          Ref: AWS::Region
-      CidrBlock: 10.0.2.0/24
-      MapPublicIpOnLaunch: false
-      VpcId: !Ref AWSAssignmentVPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${environment}-private-subnet-a'
-
-  AWSAssignmentPublicSubnetB:
-    Type: AWS::EC2::Subnet
-    Properties:
-      AvailabilityZone: !Select
-        - 1
-        - !GetAZs
-          Ref: AWS::Region
-      CidrBlock: 10.0.3.0/24
-      MapPublicIpOnLaunch: true
-      VpcId: !Ref AWSAssignmentVPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${environment}-public-subnet-a'
-
-  AWSAssignmentPrivateSubnetB:
-    Type: AWS::EC2::Subnet
-    Properties:
-      AvailabilityZone: !Select
-        - 1
-        - !GetAZs
-          Ref: AWS::Region
-      CidrBlock: 10.0.4.0/24
-      MapPublicIpOnLaunch: false
-      VpcId: !Ref AWSAssignmentVPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${environment}-private-subnet-a'
+          Value: !Sub '${environment}-subnet-a'
 
   AWSAssignmentInternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -86,7 +44,7 @@ Resources:
       InternetGatewayId: !Ref AWSAssignmentInternetGateway
       VpcId: !Ref AWSAssignmentVPC
 
-  AWSAssignmentPublicRouteTable:
+  AWSAssignmentRouteTable:
     DependsOn: AWSAssignmentAttachGateway
     Type: AWS::EC2::RouteTable
     Properties:
@@ -97,29 +55,59 @@ Resources:
     Properties:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref AWSAssignmentInternetGateway
-      RouteTableId: !Ref AWSAssignmentPublicRouteTable
+      RouteTableId: !Ref AWSAssignmentRouteTable
 
-  AWSAssignmentPublicRouteAssociationA:
+  AWSAssignmentRouteAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref AWSAssignmentPublicRouteTable
-      SubnetId: !Ref AWSAssignmentPublicSubnetA
-
-  AWSAssignmentPublicRouteAssociationB:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref AWSAssignmentPublicRouteTable
-      SubnetId: !Ref AWSAssignmentPublicSubnetB
+      RouteTableId: !Ref AWSAssignmentRouteTable
+      SubnetId: !Ref AWSAssignmentSubnet
 
   AWSAssignmentClusterSubnetGroup:
     Type: AWS::Redshift::ClusterSubnetGroup
     Properties:
       Description: Cluster Group for Redshift Assignment
       SubnetIds:
-        - !Ref AWSAssignmentPrivateSubnetA
+        - !Ref AWSAssignmentSubnet
       Tags:
         - Key: Name
           Value: !Sub '${environment}-redshift-cluster-group'
+
+  AWSAssignmentS3EndPoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PolicyDocument: '{
+           "Version":"2012-10-17",
+           "Statement":[{
+             "Effect":"Allow",
+             "Principal": "*",
+             "Action":"s3:*"
+           }]
+        }'
+      RouteTableIds:
+        - !Ref AWSAssignmentRouteTable
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      VpcId: !Ref AWSAssignmentVPC
+
+  AWSAssignmentSGBase:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: AWS Assignment VPC Security Group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: 22
+          ToPort: 22
+      VpcId: !Ref AWSAssignmentVPC
+
+  AWSAssignmentSGBaseIngress:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref AWSAssignmentSGBase
+      IpProtocol: tcp
+      FromPort: 0
+      ToPort: 65535
+      SourceSecurityGroupId: !GetAtt AWSAssignmentSGBase.GroupId
 
 
 #############################################End Of VPC Resources##########################################
@@ -182,24 +170,64 @@ Resources:
 
 ############################################ Finished Creating the S3 Buckets ########################################
 
-############################################ Creating Redshift Cluster ###############################################
+############################################# Creating Redshift Cluster ###############################################
 
-#  AWSAssigmentRedshiftCluster:
-#    Type: "AWS::Redshift::Cluster"
-#    Properties:
-#      DBName: !Ref environment
-#      MasterUsername: "root"
-#      MasterUserPassword: !Ref redshiftPassword
-#      NodeType: "dc2.large"
-#      ClusterType: "multi-node"
-#      NumberOfNodes: 4
-#      ClusterSubnetGroupName: !Ref AWSAssignmentClusterSubnetGroup
-#      Tags:
-#        - Key: "environment"
-#          Value: "awstakehome"
+  AWSAssigmentRedshiftDataBucketAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - redshift.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      RoleName: !Sub '${environment}-redshift-s3-access-role'
+      Tags:
+        - Key: "environment"
+          Value: "awstakehome"
 
-############################################ Finished Creating Redshift Cluster ######################################
+  AWSAssigmentRedshiftDataBucketRolePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action: s3:ListAllMyBuckets
+            Resource: arn:aws:s3:::*
+          - Effect: Allow
+            Action:
+              - 's3:Get*'
+              - 's3:List*'
+            Resource: '*'
+      PolicyName: !Sub '${environment}-redshift-s3-access-policy'
+      Roles:
+        - !Ref AWSAssigmentRedshiftDataBucketAccessRole
 
+
+  AWSAssigmentRedshiftCluster:
+    Type: "AWS::Redshift::Cluster"
+    Properties:
+      DBName: !Ref environment
+      MasterUsername: "root"
+      MasterUserPassword: !Ref redshiftPassword
+      NodeType: "dc2.large"
+      ClusterType: "multi-node"
+      NumberOfNodes: 4
+      ClusterSubnetGroupName: !Ref AWSAssignmentClusterSubnetGroup
+      VpcSecurityGroupIds:
+        - !Sub ${AWSAssignmentSGBase}
+      IamRoles:
+        - !GetAtt AWSAssigmentRedshiftDataBucketAccessRole.Arn
+      PubliclyAccessible: 'false'
+      Tags:
+        - Key: "environment"
+          Value: "awstakehome"
+
+############################################# Finished Creating Redshift Cluster ######################################
+
+############################################# Creating AWS Glue Roles, Policy and Job #################################
 
   AWSAssigmentGlueServiceRole:
     Type: AWS::IAM::Role
@@ -246,6 +274,14 @@ Resources:
           - Effect: Allow
             Action: s3:HeadBucket
             Resource: '*'
+          - Effect: Allow
+            Action:
+              - s3:*
+            Resource: !Join
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Sub ${environment}-functions
+                - /*
       ManagedPolicyName: !Sub '${environment}-glue-service-role-policy'
       Roles:
         - !Ref AWSAssigmentGlueServiceRole
@@ -276,4 +312,6 @@ Resources:
       Tags: {"environment": "awstakehome"}
     DependsOn:
       - AWSAssigmentGlueServiceRolePolicy
+
+############################################# Finished Creating AWS Glue Roles, Policy and Job ########################
 
