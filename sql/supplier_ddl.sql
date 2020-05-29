@@ -2,10 +2,7 @@
 
 create schema if not exists assignment;
 
-SET search_path = assignment;
-
-
-create table if not exists supplier_stage(
+create table if not exists assignment.supplier_stage(
         s_suppkey bigint encode MOSTLY32,
         s_name varchar(100) encode LZO,
         s_address varchar(100) encode LZO,

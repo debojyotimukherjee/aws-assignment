@@ -294,7 +294,7 @@ Resources:
     Type: AWS::Glue::Job
     Properties:
       Command:
-        Name: pythonshell
+        Name: glueetl
         PythonVersion: 3
         ScriptLocation: !Sub "s3://${environment}-functions/glue_etl/awsassignment_glue_etl_load.py"
       Description: Glue ETL for Loading Data into S3, which will be eventually loaded to Redshift
@@ -303,10 +303,17 @@ Resources:
         "--DATA_SOURCE_BUCKET_NAME": !Ref AWSAssignmentS3DataSource
         "--DATA_OUTPUT_BUCKET_NAME": !Ref AWSAssignmentS3DataOutput
         "--ENVIRONMENT": !Ref environment
+        "--DATA_SOURCE_NAME": "supplier" #To be a non hardcoded value
+        "--SOURCE_FILE_TYPE": "parquet"
+        "--FILE_HEADER": " "
+        "--FILE_DELIMITER": " "
+        "--FILE_NULL_VALUE": " "
+        "--OUTPUT_FILE_PARTITIONS": 4 #To be a non hardcoded value
+        "--OUTPUT_FILE_DELIMITER": "|"
       ExecutionProperty:
         MaxConcurrentRuns: 1
       GlueVersion: 1.0
-      MaxCapacity: 0.0625
+      MaxCapacity: 2
       Name: !Sub '${environment}-glue-etl-job'
       Role: !GetAtt AWSAssigmentGlueServiceRole.Arn
       Tags: {"environment": "awstakehome"}
