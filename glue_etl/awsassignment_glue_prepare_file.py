@@ -40,26 +40,6 @@ def write_file(file_path, read_file_df, output_file_partitions, output_file_deli
         sys.exit()
 
 
-def write_to_redshift_staging():
-    try:
-        conn_transaction = pgdb.connect(database="aws-assignment",
-                                        user="root",
-                                        password="RedPass123",
-                                        host="aws-assignment-awsassigmentredshiftcluster-1es1qwqyu2buq.cnowfxl3k0d2.us-east-1.redshift.amazonaws.com",
-                                        port=5439
-                                        )
-
-        cursor = conn_transaction.cursor()
-        query_truncate = "truncate table assignment.supplier_stage"
-        cursor.execute(query_truncate)
-        conn_transaction.commit()
-        cursor.close()
-
-    except Exception as e:
-        print(f'Unhandled exception: {str(e)}')
-        sys.exit()
-
-
 if __name__ == '__main__':
     try:
         default_args = getResolvedOptions(sys.argv, ['AWS_REGION', 'DATA_SOURCE_BUCKET_NAME',
@@ -92,9 +72,6 @@ if __name__ == '__main__':
 
         # Write Dataframe to S3:
         write_file(target_path, read_file_df, output_file_partitions, output_file_delimiter)
-
-        # Write to S3 Staging Table
-        write_to_redshift_staging()
 
     except Exception as e:
         print(f'Unhandled exception: {str(e)}')

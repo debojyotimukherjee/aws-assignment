@@ -172,7 +172,7 @@ Resources:
 
 ############################################# Creating Redshift Cluster ###############################################
 
-  AWSAssigmentRedshiftDataBucketAccessRole:
+  AWSAssignmentRedshiftDataBucketAccessRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -188,7 +188,7 @@ Resources:
         - Key: "environment"
           Value: "awstakehome"
 
-  AWSAssigmentRedshiftDataBucketRolePolicy:
+  AWSAssignmentRedshiftDataBucketRolePolicy:
     Type: AWS::IAM::Policy
     Properties:
       PolicyDocument:
@@ -203,10 +203,10 @@ Resources:
             Resource: '*'
       PolicyName: !Sub '${environment}-redshift-s3-access-policy'
       Roles:
-        - !Ref AWSAssigmentRedshiftDataBucketAccessRole
+        - !Ref AWSAssignmentRedshiftDataBucketAccessRole
 
 
-  AWSAssigmentRedshiftCluster:
+  AWSAssignmentRedshiftCluster:
     Type: "AWS::Redshift::Cluster"
     Properties:
       DBName: !Ref environment
@@ -219,7 +219,7 @@ Resources:
       VpcSecurityGroupIds:
         - !Sub ${AWSAssignmentSGBase}
       IamRoles:
-        - !GetAtt AWSAssigmentRedshiftDataBucketAccessRole.Arn
+        - !GetAtt AWSAssignmentRedshiftDataBucketAccessRole.Arn
       PubliclyAccessible: 'false'
       Tags:
         - Key: "environment"
@@ -229,7 +229,7 @@ Resources:
 
 ############################################# Creating AWS Glue Roles, Policy and Job #################################
 
-  AWSAssigmentGlueServiceRole:
+  AWSAssignmentGlueServiceRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -248,7 +248,7 @@ Resources:
           Key: "environment"
           Value: "awstakehome"
 
-  AWSAssigmentGlueServiceRolePolicy:
+  AWSAssignmentGlueServiceRolePolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       Path: /service-role/
@@ -284,19 +284,19 @@ Resources:
                 - /*
       ManagedPolicyName: !Sub '${environment}-glue-service-role-policy'
       Roles:
-        - !Ref AWSAssigmentGlueServiceRole
+        - !Ref AWSAssignmentGlueServiceRole
     DependsOn:
-      - AWSAssigmentGlueServiceRole
+      - AWSAssignmentGlueServiceRole
       - AWSAssignmentS3DataSource
       - AWSAssignmentS3DataOutput
 
-  AWSAssigmentGlueETLJob:
+  AWSAssignmentGlueETLJob:
     Type: AWS::Glue::Job
     Properties:
       Command:
         Name: glueetl
         PythonVersion: 3
-        ScriptLocation: !Sub "s3://${environment}-functions/glue_etl/awsassignment_glue_etl_load.py"
+        ScriptLocation: !Sub "s3://${environment}-functions/glue_etl/awsassignment_glue_prepare_file.py"
       Description: Glue ETL for Loading Data into S3, which will be eventually loaded to Redshift
       DefaultArguments:
         "--AWS_REGION": !Ref AWS::Region
@@ -314,11 +314,39 @@ Resources:
         MaxConcurrentRuns: 1
       GlueVersion: 1.0
       MaxCapacity: 2
-      Name: !Sub '${environment}-glue-etl-job'
-      Role: !GetAtt AWSAssigmentGlueServiceRole.Arn
+      Name: !Sub '${environment}-glue-prepare-file-job'
+      Role: !GetAtt AWSAssignmentGlueServiceRole.Arn
       Tags: {"environment": "awstakehome"}
     DependsOn:
-      - AWSAssigmentGlueServiceRolePolicy
+      - AWSAssignmentGlueServiceRolePolicy
+
+  AWSAssignmentGlueLoadRedshiftJob:
+    Type: AWS::Glue::Job
+    Properties:
+      Command:
+        Name: pythonshell
+        PythonVersion: 3
+        ScriptLocation: !Sub "s3://${environment}-functions/glue_etl/awsassignment_python_load_redshift.py"
+      Description: Glue Pythonshell for Loading Data into Redshift
+      DefaultArguments:
+        "--AWS_REGION": !Ref AWS::Region
+        "--ENVIRONMENT": !Ref environment
+        "--DATA_SOURCE_NAME": "supplier" #To be a non hardcoded value
+        "--RS_HOST": !Sub "${AWSAssignmentRedshiftCluster.Endpoint.Address}"
+        "--RS_PORT": 5439
+        "--RS_ETL_USER": "root"
+        "--RS_ETL_PASSWORD": !Ref redshiftPassword
+        "--RS_SCHEMA": "assignment"
+      ExecutionProperty:
+        MaxConcurrentRuns: 1
+      GlueVersion: 1.0
+      MaxCapacity: 1
+      Name: !Sub '${environment}-python-load-redshift'
+      Role: !GetAtt AWSAssignmentGlueServiceRole.Arn
+      Tags: {"environment": "awstakehome"}
+    DependsOn:
+      - AWSAssignmentGlueServiceRolePolicy
+      - AWSAssignmentRedshiftCluster
 
 ############################################# Finished Creating AWS Glue Roles, Policy and Job ########################
 

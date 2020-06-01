@@ -37,7 +37,8 @@ aws s3api put-bucket-tagging \
 	--bucket ${FUNCTIONS_BUCKET_NAME} \
 	--tagging "TagSet=[{Key=environment,Value=${ENVIRONMENT}}]"
 
-aws s3 cp glue_etl/awsassignment_glue_etl_load.py s3://${FUNCTIONS_BUCKET_NAME}/glue_etl/
+aws s3 cp glue_etl/ s3://${FUNCTIONS_BUCKET_NAME}/glue_etl/ --recursive
+aws s3 cp sql/ s3://${FUNCTIONS_BUCKET_NAME}/sql/ --recursive
 
 aws cloudformation package \
 	--template-file ${CF_TEMP_FILENAME} \
