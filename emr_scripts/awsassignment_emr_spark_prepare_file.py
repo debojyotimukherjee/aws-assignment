@@ -63,7 +63,7 @@ if __name__ == '__main__':
         data_source_name = None
 
         try:
-            opts, args = getopt.getopt(sys.argv[1:], "f:s:")
+            opts, args = getopt.getopt(sys.argv[1:], "f:s:e:")
         except Exception as e:
             print("Invalid Arguments - {e}".format(e=e))
             sys.exit()
