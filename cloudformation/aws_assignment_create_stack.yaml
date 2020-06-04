@@ -1,0 +1,414 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: 'AWS Take Home Assignment Approach - ETL 1'
+Parameters:
+  environment:
+    Type: String
+    Default: awstakehome
+  s3FunctionsBucket:
+    Type: String
+  redshiftRootUser:
+    Type: String
+  redshiftRootPassword:
+    Type: String
+  redshiftETLUser:
+    Type: String
+  redshiftETLPassword:
+    Type: String
+
+Resources:
+
+############################################Create VPC Resources###################################
+  AWSAssignmentVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: !Sub '${environment}-vpc'
+
+  AWSAssignmentSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs
+          Ref: AWS::Region
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref AWSAssignmentVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${environment}-subnet-a'
+
+  AWSAssignmentInternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  AWSAssignmentAttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref AWSAssignmentInternetGateway
+      VpcId: !Ref AWSAssignmentVPC
+
+  AWSAssignmentRouteTable:
+    DependsOn: AWSAssignmentAttachGateway
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref AWSAssignmentVPC
+
+  AWSAssignmentPublicDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref AWSAssignmentInternetGateway
+      RouteTableId: !Ref AWSAssignmentRouteTable
+
+  AWSAssignmentRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref AWSAssignmentRouteTable
+      SubnetId: !Ref AWSAssignmentSubnet
+
+  AWSAssignmentClusterSubnetGroup:
+    Type: AWS::Redshift::ClusterSubnetGroup
+    Properties:
+      Description: Cluster Group for Redshift Assignment
+      SubnetIds:
+        - !Ref AWSAssignmentSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub '${environment}-redshift-cluster-group'
+
+  AWSAssignmentS3EndPoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PolicyDocument: '{
+           "Version":"2012-10-17",
+           "Statement":[{
+             "Effect":"Allow",
+             "Principal": "*",
+             "Action":"s3:*"
+           }]
+        }'
+      RouteTableIds:
+        - !Ref AWSAssignmentRouteTable
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      VpcId: !Ref AWSAssignmentVPC
+
+  AWSAssignmentSGBase:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: AWS Assignment VPC Security Group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: 22
+          ToPort: 22
+      VpcId: !Ref AWSAssignmentVPC
+
+  AWSAssignmentSGBaseIngress:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref AWSAssignmentSGBase
+      IpProtocol: tcp
+      FromPort: 0
+      ToPort: 65535
+      SourceSecurityGroupId: !GetAtt AWSAssignmentSGBase.GroupId
+
+
+#############################################End Of VPC Resources##########################################
+
+############################################Creating the S3 Buckets########################################
+
+  AWSAssignmentS3DataSource:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${environment}-data-source'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        -
+          Key: "environment"
+          Value: "awstakehome"
+
+  AWSAssignmentS3DataRegistration:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${environment}-data-registration'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        -
+          Key: "environment"
+          Value: "awstakehome"
+
+  AWSAssignmentS3DataOutput:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${environment}-data-output'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        -
+          Key: "environment"
+          Value: "awstakehome"
+
+############################################ Finished Creating the S3 Buckets ########################################
+
+############################################# Creating Redshift Cluster ###############################################
+
+  AWSAssignmentRedshiftDataBucketAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - redshift.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      RoleName: !Sub '${environment}-redshift-s3-access-role'
+      Tags:
+        - Key: "environment"
+          Value: "awstakehome"
+
+  AWSAssignmentRedshiftDataBucketRolePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action: s3:ListAllMyBuckets
+            Resource: arn:aws:s3:::*
+          - Effect: Allow
+            Action:
+              - 's3:Get*'
+              - 's3:List*'
+            Resource: '*'
+      PolicyName: !Sub '${environment}-redshift-s3-access-policy'
+      Roles:
+        - !Ref AWSAssignmentRedshiftDataBucketAccessRole
+
+
+  AWSAssignmentRedshiftCluster:
+    Type: "AWS::Redshift::Cluster"
+    Properties:
+      DBName: !Ref environment
+      MasterUsername: !Ref redshiftRootUser
+      MasterUserPassword: !Ref redshiftRootPassword
+      NodeType: "dc2.large"
+      ClusterType: "multi-node"
+      NumberOfNodes: 4
+      ClusterSubnetGroupName: !Ref AWSAssignmentClusterSubnetGroup
+      VpcSecurityGroupIds:
+        - !Sub ${AWSAssignmentSGBase}
+      IamRoles:
+        - !GetAtt AWSAssignmentRedshiftDataBucketAccessRole.Arn
+      PubliclyAccessible: false
+      Tags:
+        - Key: "environment"
+          Value: "awstakehome"
+
+############################################# Finished Creating Redshift Cluster ######################################
+
+############################################# Creating AWS Glue Roles, Policy and Job #################################
+
+  AWSAssignmentRedshiftETLUserSecret:
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Name: !Sub '${environment}-rs-etl-password'
+      Description: The secret password for redshift ETL user
+      SecretString: !Sub '{"password": "${redshiftETLPassword}"}'
+      Tags:
+        - Key: "environment"
+          Value: "awstakehome"
+
+  AWSAssignmentGlueServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: glue.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
+      Path: /service-role/
+      RoleName: !Sub '${environment}-glue-service-role'
+      Tags:
+        -
+          Key: "environment"
+          Value: "awstakehome"
+
+  AWSAssignmentGlueServiceRolePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Path: /service-role/
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: s3:ListBucket
+            Resource: !GetAtt AWSAssignmentS3DataSource.Arn
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:GetObjectTagging
+            Resource: !Sub '${AWSAssignmentS3DataSource.Arn}/*'
+          - Effect: Allow
+            Action:
+              - s3:DeleteObject
+              - s3:GetObject
+              - s3:GetObjectTagging
+              - s3:PutObject
+              - s3:PutObjectTagging
+            Resource: !Sub '${AWSAssignmentS3DataOutput.Arn}/*'
+          - Effect: Allow
+            Action: s3:HeadBucket
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - s3:*
+            Resource: !Join
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Sub ${environment}-functions
+                - /*
+          - Effect: Allow
+            Action: secretsmanager:GetSecret*
+            Resource: "*"
+      ManagedPolicyName: !Sub '${environment}-glue-service-role-policy'
+      Roles:
+        - !Ref AWSAssignmentGlueServiceRole
+    DependsOn:
+      - AWSAssignmentGlueServiceRole
+      - AWSAssignmentS3DataSource
+      - AWSAssignmentS3DataOutput
+
+  AWSAssignmentGluePrepareFileJob:
+    Type: AWS::Glue::Job
+    Properties:
+      Command:
+        Name: glueetl
+        PythonVersion: 3
+        ScriptLocation: !Sub "s3://${environment}-functions/glue_etl/awsassignment_glue_prepare_file.py"
+      Description: Glue ETL for Loading Data into S3, which will be eventually loaded to Redshift
+      DefaultArguments:
+        "--AWS_REGION": !Ref AWS::Region
+        "--DATA_SOURCE_BUCKET_NAME": !Ref AWSAssignmentS3DataSource
+        "--DATA_OUTPUT_BUCKET_NAME": !Ref AWSAssignmentS3DataOutput
+        "--ENVIRONMENT": !Ref environment
+        "--DATA_SOURCE_NAME": "supplier" #To be a non hardcoded value
+        "--SOURCE_FILE_TYPE": "parquet"
+        "--FILE_HEADER": " "
+        "--FILE_DELIMITER": " "
+        "--FILE_NULL_VALUE": " "
+        "--OUTPUT_FILE_PARTITIONS": 4 #To be a non hardcoded value
+        "--OUTPUT_FILE_DELIMITER": "|"
+      ExecutionProperty:
+        MaxConcurrentRuns: 1
+      GlueVersion: 1.0
+      MaxCapacity: 2
+      Name: !Sub '${environment}-glueetl-prepare-file-job'
+      Role: !GetAtt AWSAssignmentGlueServiceRole.Arn
+      Tags: {"environment": "awstakehome"}
+    DependsOn:
+      - AWSAssignmentGlueServiceRolePolicy
+
+  AWSAssignmentGlueLoadRedshiftJob:
+    Type: AWS::Glue::Job
+    Properties:
+      Command:
+        Name: pythonshell
+        PythonVersion: 3
+        ScriptLocation: !Sub "s3://${environment}-functions/glue_etl/awsassignment_python_load_redshift.py"
+      Description: Glue Pythonshell for Loading Data into Redshift
+      DefaultArguments:
+        "--AWS_REGION": !Ref AWS::Region
+        "--ENVIRONMENT": !Ref environment
+        "--DATA_SOURCE_NAME": "supplier" #To be a non hardcoded value
+        "--RS_HOST": !Sub "${AWSAssignmentRedshiftCluster.Endpoint.Address}"
+        "--RS_PORT": 5439
+        "--RS_ETL_USER": !Ref redshiftETLUser
+        "--RS_ETL_PASSWORD": !Sub '${environment}-rs-etl-password'
+        "--RS_SCHEMA": "assignment"
+      ExecutionProperty:
+        MaxConcurrentRuns: 1
+      GlueVersion: 1.0
+      MaxCapacity: 1
+      Name: !Sub '${environment}-pythonshell-load-redshift'
+      Role: !GetAtt AWSAssignmentGlueServiceRole.Arn
+      Tags: {"environment": "awstakehome"}
+    DependsOn:
+      - AWSAssignmentGlueServiceRolePolicy
+      - AWSAssignmentRedshiftCluster
+
+  AWSAssignmentGluePrepareFileJobTriggerForSupplier:
+    Type: AWS::Glue::Trigger
+    Properties:
+      Type: SCHEDULED
+      Description: "The Glue Trigger for the Redshift Load Process"
+      Schedule: cron(0 22 * * ? *)
+      StartOnCreation: true
+      Actions:
+        - JobName: AWSAssignmentGluePrepareFileJob
+          Arguments:
+            "--DATA_SOURCE_NAME": "supplier" #To be a non hardcoded value
+            "--SOURCE_FILE_TYPE": "parquet"
+            "--FILE_HEADER": " "
+            "--FILE_DELIMITER": " "
+            "--FILE_NULL_VALUE": " "
+            "--OUTPUT_FILE_PARTITIONS": 4 #To be a non hardcoded value
+            "--OUTPUT_FILE_DELIMITER": "|"
+      Name: !Sub '${environment}-prepare-redshift-file-trigger'
+      Tags: {"environment": "awstakehome"}
+
+  AWSAssignmentGlueLoadRedshiftJobTriggerForSupplier:
+    Type: AWS::Glue::Trigger
+    Properties:
+      Description: "Description for a conditional job trigger"
+      Type: "CONDITIONAL"
+      StartOnCreation: true
+      Actions:
+        - JobName: !Ref AWSAssignmentGlueLoadRedshiftJob
+          Arguments:
+            "--DATA_SOURCE_NAME": "supplier"
+            "--RS_HOST": !Sub "${AWSAssignmentRedshiftCluster.Endpoint.Address}"
+            "--RS_PORT": 5439
+            "--RS_ETL_USER": !Ref redshiftETLUser
+            "--RS_ETL_PASSWORD": !Sub '${environment}-rs-etl-password'
+            "--RS_SCHEMA": "assignment"
+      Predicate:
+        Conditions:
+          - LogicalOperator: EQUALS
+            JobName: !Ref AWSAssignmentGluePrepareFileJob
+            State: SUCCEEDED
+      Name: !Sub '${environment}-python-load-redshift-trigger'
+      Tags: {"environment": "awstakehome"}
+
+############################################# Finished Creating AWS Glue Roles, Policy and Job ########################
+
