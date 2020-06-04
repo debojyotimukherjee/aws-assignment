@@ -96,7 +96,7 @@ if __name__ == '__main__':
         file_header = config[f'{data_source_name}_config']['file_header']
         file_delimiter = config[f'{data_source_name}_config']['file_delimiter']
         null_value = config[f'{data_source_name}_config']['null_value']
-        output_file_partitions = config[f'{data_source_name}_config']['output_file_partitions']
+        output_file_partitions = int(config[f'{data_source_name}_config']['output_file_partitions'])
         output_file_delimiter = config[f'{data_source_name}_config']['output_file_delimiter']
 
         source_folder_date = datetime.now().strftime("%Y%m%d")
