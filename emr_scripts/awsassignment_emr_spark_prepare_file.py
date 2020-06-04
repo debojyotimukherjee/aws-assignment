@@ -104,7 +104,7 @@ if __name__ == '__main__':
         source_path = f's3://{source_bucket}/{data_source_name}/{source_folder_date}'
         target_path = f'hdfs:///output_store/{data_source_name}/{source_folder_date}'
 
-        spark_session = SparkSession.appName(f'{data_source_name}-prepare-file').getOrCreate()
+        spark_session = SparkSession.builder.appName(f'{data_source_name}-prepare-file').getOrCreate()
 
         read_file_df = get_read_file_df(spark_session, source_path, source_file_type)
 
