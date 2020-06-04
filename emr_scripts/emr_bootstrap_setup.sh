@@ -9,15 +9,16 @@ fi
 
 environment=$1
 
-#Creating directories in EMR in startup
-mkdir -p aws_assignment/shell_script
-mkdir -p aws_assignment/spark_script
-mkdir -p aws_assignment/sql_script
-
 #Copying Scripts from S3
 aws s3 cp s3://${environment}-emr_scripts/shell_script aws_assignment/shell_script/ --recursive
 aws s3 cp s3://${environment}-emr_scripts/spark_script aws_assignment/shell_script/ --recursive
 aws s3 cp s3://${environment}-emr_scripts/sql_script aws_assignment/shell_script/ --recursive
 
-#Install
+#Install postgres client
 sudo yum install -y postgresql
+
+#Install git
+sudo yum install -y git
+
+#Download Code Repo
+git clone https://github.com/debojyotimukherjee/aws-assignment.git
