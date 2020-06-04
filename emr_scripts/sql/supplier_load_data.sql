@@ -1,8 +1,8 @@
-BEGIN transaction;
+BEGIN;
 
 truncate table :schema_name.supplier_stage;
 
-select * from :schema_name.supplier_data limit 10;
+truncate table :schema_name.supplier_data;
 
 copy :schema_name.supplier_stage
 from :emr_file_path credentials
@@ -24,6 +24,8 @@ insert into :schema_name.supplier_data
       from :schema_name.supplier_stage
 );
 
-END transaction;
+commit;
+
+END;
 
 
