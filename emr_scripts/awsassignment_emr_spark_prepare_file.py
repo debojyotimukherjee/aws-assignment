@@ -1,58 +1,7 @@
 import sys
-from awsglue.context import GlueContext
-from awsglue.utils import getResolvedOptions
-from pyspark.context import SparkContext
+from pyspark.sql import SparkSession
 from datetime import datetime
 
-
-def get_secret():
-
-    secret_name = "aws-assignment-rs-etl-password"
-    region_name = "us-east-1"
-
-    # Create a Secrets Manager client
-    session = boto3.session.Session()
-    client = session.client(
-        service_name='secretsmanager',
-        region_name=region_name
-    )
-
-    # In this sample we only handle the specific exceptions for the 'GetSecretValue' API.
-    # See https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html
-    # We rethrow the exception by default.
-
-    try:
-        get_secret_value_response = client.get_secret_value(
-            SecretId=secret_name
-        )
-    except ClientError as e:
-        if e.response['Error']['Code'] == 'DecryptionFailureException':
-            # Secrets Manager can't decrypt the protected secret text using the provided KMS key.
-            # Deal with the exception here, and/or rethrow at your discretion.
-            raise e
-        elif e.response['Error']['Code'] == 'InternalServiceErrorException':
-            # An error occurred on the server side.
-            # Deal with the exception here, and/or rethrow at your discretion.
-            raise e
-        elif e.response['Error']['Code'] == 'InvalidParameterException':
-            # You provided an invalid value for a parameter.
-            # Deal with the exception here, and/or rethrow at your discretion.
-            raise e
-        elif e.response['Error']['Code'] == 'InvalidRequestException':
-            # You provided a parameter value that is not valid for the current state of the resource.
-            # Deal with the exception here, and/or rethrow at your discretion.
-            raise e
-        elif e.response['Error']['Code'] == 'ResourceNotFoundException':
-            # We can't find the resource that you asked for.
-            # Deal with the exception here, and/or rethrow at your discretion.
-            raise e
-    else:
-        # Decrypts secret using the associated KMS CMK.
-        # Depending on whether the secret is a string or binary, one of these fields will be populated.
-        if 'SecretString' in get_secret_value_response:
-            secret = get_secret_value_response['SecretString']
-        else:
-            decoded_binary_secret = base64.b64decode(get_secret_value_response['SecretBinary'])
 
 def get_read_file_df(spark, file_path, file_type, file_header="true", file_delimiter=None, null_value=''):
     try:
@@ -97,7 +46,6 @@ if __name__ == '__main__':
                                                      'FILE_NULL_VALUE', 'OUTPUT_FILE_PARTITIONS',
                                                      'OUTPUT_FILE_DELIMITER'])
 
-        aws_region = default_args['AWS_REGION']
         environment = default_args['ENVIRONMENT']
         target_bucket = f'{environment}-data-output'
         source_bucket = f'{environment}-data-source'
@@ -114,8 +62,7 @@ if __name__ == '__main__':
         source_path = f's3://{source_bucket}/{data_source_name}/{source_folder_date}'
         target_path = f's3://{target_bucket}/{data_source_name}/output'
 
-        glue_context = GlueContext(SparkContext.getOrCreate())
-        spark_session = glue_context.spark_session
+        spark_session = SparkSession.appName(f'{data_source_name}-prepare-file').getOrCreate()
 
         read_file_df = get_read_file_df(spark_session, source_path, source_file_type)
 

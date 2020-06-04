@@ -7,7 +7,13 @@ Parameters:
     Default: awstakehome
   s3FunctionsBucket:
     Type: String
-  redshiftPassword:
+  redshiftRootUser:
+    Type: String
+  redshiftRootPassword:
+    Type: String
+  redshiftETLUser:
+    Type: String
+  redshiftETLPassword:
     Type: String
 
 Resources:
@@ -210,8 +216,8 @@ Resources:
     Type: "AWS::Redshift::Cluster"
     Properties:
       DBName: !Ref environment
-      MasterUsername: "root"
-      MasterUserPassword: !Ref redshiftPassword
+      MasterUsername: !Ref redshiftRootUser
+      MasterUserPassword: !Ref redshiftRootPassword
       NodeType: "dc2.large"
       ClusterType: "multi-node"
       NumberOfNodes: 4
@@ -220,7 +226,7 @@ Resources:
         - !Sub ${AWSAssignmentSGBase}
       IamRoles:
         - !GetAtt AWSAssignmentRedshiftDataBucketAccessRole.Arn
-      PubliclyAccessible: 'false'
+      PubliclyAccessible: false
       Tags:
         - Key: "environment"
           Value: "awstakehome"
@@ -228,6 +234,16 @@ Resources:
 ############################################# Finished Creating Redshift Cluster ######################################
 
 ############################################# Creating AWS Glue Roles, Policy and Job #################################
+
+  AWSAssignmentRedshiftETLUserSecret:
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Name: !Sub '${environment}-rs-etl-password'
+      Description: The secret password for redshift ETL user
+      SecretString: !Sub '{"password": "${redshiftETLPassword}"}'
+      Tags:
+        - Key: "environment"
+          Value: "awstakehome"
 
   AWSAssignmentGlueServiceRole:
     Type: AWS::IAM::Role
@@ -282,6 +298,9 @@ Resources:
               - - 'arn:aws:s3:::'
                 - !Sub ${environment}-functions
                 - /*
+          - Effect: Allow
+            Action: secretsmanager:GetSecret*
+            Resource: "*"
       ManagedPolicyName: !Sub '${environment}-glue-service-role-policy'
       Roles:
         - !Ref AWSAssignmentGlueServiceRole
@@ -290,7 +309,7 @@ Resources:
       - AWSAssignmentS3DataSource
       - AWSAssignmentS3DataOutput
 
-  AWSAssignmentGlueETLJob:
+  AWSAssignmentGluePrepareFileJob:
     Type: AWS::Glue::Job
     Properties:
       Command:
@@ -314,7 +333,7 @@ Resources:
         MaxConcurrentRuns: 1
       GlueVersion: 1.0
       MaxCapacity: 2
-      Name: !Sub '${environment}-glue-prepare-file-job'
+      Name: !Sub '${environment}-glueetl-prepare-file-job'
       Role: !GetAtt AWSAssignmentGlueServiceRole.Arn
       Tags: {"environment": "awstakehome"}
     DependsOn:
@@ -334,19 +353,62 @@ Resources:
         "--DATA_SOURCE_NAME": "supplier" #To be a non hardcoded value
         "--RS_HOST": !Sub "${AWSAssignmentRedshiftCluster.Endpoint.Address}"
         "--RS_PORT": 5439
-        "--RS_ETL_USER": "root"
-        "--RS_ETL_PASSWORD": !Ref redshiftPassword
+        "--RS_ETL_USER": !Ref redshiftETLUser
+        "--RS_ETL_PASSWORD": !Sub '${environment}-rs-etl-password'
         "--RS_SCHEMA": "assignment"
       ExecutionProperty:
         MaxConcurrentRuns: 1
       GlueVersion: 1.0
       MaxCapacity: 1
-      Name: !Sub '${environment}-python-load-redshift'
+      Name: !Sub '${environment}-pythonshell-load-redshift'
       Role: !GetAtt AWSAssignmentGlueServiceRole.Arn
       Tags: {"environment": "awstakehome"}
     DependsOn:
       - AWSAssignmentGlueServiceRolePolicy
       - AWSAssignmentRedshiftCluster
+
+  AWSAssignmentGluePrepareFileJobTriggerForSupplier:
+    Type: AWS::Glue::Trigger
+    Properties:
+      Type: SCHEDULED
+      Description: "The Glue Trigger for the Redshift Load Process"
+      Schedule: cron(0 22 * * ? *)
+      StartOnCreation: true
+      Actions:
+        - JobName: AWSAssignmentGluePrepareFileJob
+          Arguments:
+            "--DATA_SOURCE_NAME": "supplier" #To be a non hardcoded value
+            "--SOURCE_FILE_TYPE": "parquet"
+            "--FILE_HEADER": " "
+            "--FILE_DELIMITER": " "
+            "--FILE_NULL_VALUE": " "
+            "--OUTPUT_FILE_PARTITIONS": 4 #To be a non hardcoded value
+            "--OUTPUT_FILE_DELIMITER": "|"
+      Name: !Sub '${environment}-prepare-redshift-file-trigger'
+      Tags: {"environment": "awstakehome"}
+
+  AWSAssignmentGlueLoadRedshiftJobTriggerForSupplier:
+    Type: AWS::Glue::Trigger
+    Properties:
+      Description: "Description for a conditional job trigger"
+      Type: "CONDITIONAL"
+      StartOnCreation: true
+      Actions:
+        - JobName: !Ref AWSAssignmentGlueLoadRedshiftJob
+          Arguments:
+            "--DATA_SOURCE_NAME": "supplier"
+            "--RS_HOST": !Sub "${AWSAssignmentRedshiftCluster.Endpoint.Address}"
+            "--RS_PORT": 5439
+            "--RS_ETL_USER": !Ref redshiftETLUser
+            "--RS_ETL_PASSWORD": !Sub '${environment}-rs-etl-password'
+            "--RS_SCHEMA": "assignment"
+      Predicate:
+        Conditions:
+          - LogicalOperator: EQUALS
+            JobName: !Ref AWSAssignmentGluePrepareFileJob
+            State: SUCCEEDED
+      Name: !Sub '${environment}-python-load-redshift-trigger'
+      Tags: {"environment": "awstakehome"}
 
 ############################################# Finished Creating AWS Glue Roles, Policy and Job ########################
 

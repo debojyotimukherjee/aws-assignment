@@ -1,26 +1,42 @@
+#!/bin/bash
+
 #
 # Infrastructure setup test/development driver script
 # Make sure there are no special chars (spaces, hyphens, etc..) in the environment name
 #
 
 if [ $# -ne 2 ]; then
-	echo "usage: `basename $0` <environment> <redshift_root_password>" > /dev/stderr
+	echo "usage: `basename $0` <environment> <skip_credentials(y/n)" > /dev/stderr
 	exit 1
 fi
 
-readonly ENVIRONMENT="${1}"
+if [ ${2} == 'n' ]
+then
+  echo "Enter the root User Id for Redshift: "
+  read REDSHIFT_ROOT_USER
+
+  echo "Enter the root User Id's password for Redshift: "
+  read -s REDSHIFT_ROOT_PASSWORD
+
+  echo "Enter the ETL User Id for Redshift: "
+  read REDSHIFT_ETL_USER
+
+  echo "Enter the ETL User Id's password for Redshift: "
+  read -s REDSHIFT_ETL_PASSWORD
+fi
+
+
+
+ENVIRONMENT="${1}"
 echo ENVIRONMENT = ${ENVIRONMENT}
 
-readonly REDSHIFT_PASSWORD="${2}"
-echo REDSHIFT_PASSWORD="${REDSHIFT_PASSWORD}"
+CF_FILENAME="cloudformation/aws_assignment_create_stack.yaml"
+CF_TEMP_FILENAME="aws_assignment_create_stack_temp.yaml"
+CF_OUT_FILENAME="aws_assignment_create_stack_out.yaml"
+CF_STACK_NAME="${ENVIRONMENT}"
+FUNCTIONS_BUCKET_NAME="${ENVIRONMENT}-functions"
 
-readonly CF_FILENAME="cloudformation/aws_assignment_approach_1_create_stack.yaml"
-readonly CF_TEMP_FILENAME="aws_assignment_approach_1_create_stack_temp.yaml"
-readonly CF_OUT_FILENAME="aws_assignment_approach_1_create_stack_out.yaml"
-readonly CF_STACK_NAME="${ENVIRONMENT}"
-readonly FUNCTIONS_BUCKET_NAME="${ENVIRONMENT}-functions"
-
-readonly TIMESTAMP=$(date +%Y%m%d%H%M%S)
+TIMESTAMP=$(date +%Y%m%d%H%M%S)
 sed -e "s/DeploymentTimestamp/${TIMESTAMP}/g" ${CF_FILENAME} > ${CF_TEMP_FILENAME}
 
 aws s3 mb s3://${FUNCTIONS_BUCKET_NAME}/
@@ -49,7 +65,9 @@ aws cloudformation deploy \
 	--template-file ${CF_OUT_FILENAME} \
 	--stack-name ${CF_STACK_NAME} \
   --s3-bucket ${FUNCTIONS_BUCKET_NAME} \
-  --parameter-overrides "environment=${ENVIRONMENT}" "s3FunctionsBucket=${FUNCTIONS_BUCKET_NAME}" "redshiftPassword=${REDSHIFT_PASSWORD}" \
+  --parameter-overrides "environment=${ENVIRONMENT}" "s3FunctionsBucket=${FUNCTIONS_BUCKET_NAME}" \
+  "redshiftRootUser=${REDSHIFT_ROOT_USER}" "redshiftRootPassword=${REDSHIFT_ROOT_PASSWORD}" \
+  "redshiftETLUser=${REDSHIFT_ETL_USER}" "redshiftETLPassword=${REDSHIFT_ETL_PASSWORD}" \
   --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND
 
 rm -f ${CF_TEMP_FILENAME}
