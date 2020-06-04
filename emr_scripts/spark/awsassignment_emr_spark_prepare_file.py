@@ -41,23 +41,6 @@ def write_file(file_path, read_file_df, output_file_partitions, output_file_deli
 
 if __name__ == '__main__':
     try:
-        # default_args = getResolvedOptions(sys.argv, ['AWS_REGION', 'DATA_SOURCE_BUCKET_NAME',
-        #                                              'DATA_OUTPUT_BUCKET_NAME', 'ENVIRONMENT',
-        #                                              'DATA_SOURCE_NAME', 'SOURCE_FILE_TYPE',
-        #                                              'FILE_HEADER', 'FILE_DELIMITER',
-        #                                              'FILE_NULL_VALUE', 'OUTPUT_FILE_PARTITIONS',
-        #                                              'OUTPUT_FILE_DELIMITER'])
-        #
-        # environment = default_args['ENVIRONMENT']
-        # target_bucket = f'{environment}-data-output'
-        # source_bucket = f'{environment}-data-source'
-        # data_source_name = default_args['DATA_SOURCE_NAME']
-        # source_file_type = default_args['SOURCE_FILE_TYPE']
-        # file_header = default_args['FILE_HEADER']
-        # file_delimiter = default_args['FILE_DELIMITER']
-        # null_value = default_args['FILE_NULL_VALUE']
-        # output_file_partitions = int(default_args['OUTPUT_FILE_PARTITIONS'])
-        # output_file_delimiter = default_args['OUTPUT_FILE_DELIMITER']
 
         config_file = None
         data_source_name = None
