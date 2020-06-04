@@ -9,6 +9,9 @@ fi
 
 environment=$1
 
+#Create Log Directory
+mkdir /home/hadoop/logs
+
 #Install postgres client
 sudo yum install -y postgresql
 

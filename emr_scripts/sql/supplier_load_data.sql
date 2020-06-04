@@ -1,12 +1,12 @@
-truncate table schema_name.supplier_stage;
+truncate table :schema_name.supplier_stage;
 
-copy schema_name.supplier_stage
-from 's3://environment-data-output/data_source_name/output/'
-iam_role 'arn:aws:iam::aws_account_id:role/environment-redshift-s3-access-role'
+copy :schema_name.supplier_stage
+from :emr_file_path credentials
+iam_role :iam_role
 delimiter '|' gzip;
 
 
-insert into schema_name.supplier_data
+insert into :schema_name.supplier_data
 (
  select
      s_suppkey ,
@@ -17,7 +17,7 @@ insert into schema_name.supplier_data
         s_acctbal ,
         s_comment,
         current_timestamp as load_ts
-      from schema_name.supplier_stage
+      from :schema_name.supplier_stage
 );
 
 

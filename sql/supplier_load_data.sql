@@ -1,3 +1,5 @@
+/*SQL Query to*/
+
 truncate table schema_name.supplier_stage;
 
 copy schema_name.supplier_stage
