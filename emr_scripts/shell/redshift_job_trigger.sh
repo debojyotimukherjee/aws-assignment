@@ -13,8 +13,8 @@ rs_user="etl_user"
 rs_schema_name="assignment"
 rs_database_name="aws-assignment"
 secret_id_string="aws-assignment-rs-etl-password"
-rs_password=`aws secretsmanager get-secret-value --secret-id ${secret_id_string} | jq '.SecretString' | sed 's|\\"||g
-' | awk -F":" '{print $2}' | sed 's|}"||g' | sed 's/^ *//g'`
+rs_password="$(aws secretsmanager get-secret-value --secret-id ${secret_id_string} | jq '.SecretString' | sed 's|\\"||g
+' | awk -F":" '{print $2}' | sed 's|}"||g' | sed 's/^ *//g')"
 
 
 home_path=/home/hadoop/aws-assignment/emr_scripts
