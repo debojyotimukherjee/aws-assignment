@@ -15,7 +15,6 @@ rs_database_name="aws-assignment"
 secret_id_string="aws-assignment-rs-etl-password"
 rs_password="$(aws secretsmanager get-secret-value --secret-id ${secret_id_string} | jq '.SecretString' | sed 's|\\"||g
 ' | awk -F":" '{print $2}' | sed 's|}"||g' | sed 's/^ *//g')"
-rs_iam_role="'arn:aws:iam::048532184061:role/aws-assignment-redshift-s3-access-role'"
 folder_date="$(date +'%Y%m%d')"
 emr_file_path="'emr://j-35YPEDUMMF9AO/output_store/${data_source_name}/${folder_date}/'"
 
@@ -33,4 +32,4 @@ echo "Finished Spark Job to create the source files for Redshift Copy at - `date
 #Step - 2 Trigger PSQL Script
 echo "Starting PSQL Script to load the data into Redshift at - `date +"%Y%m%d%H%M%S"`" >> ${log_dir}/"${log_file_name}"
 
-PGPASSWORD="${rs_password}" psql -h ${rs_hostname} -d ${rs_database_name} -U ${rs_user} -p 5439 -v schema_name=${rs_schema_name} -v iam_role=${rs_iam_role} -v emr_file_path=${emr_file_path} -f ${home_path}/sql/supplier_load_data.sql
+PGPASSWORD="${rs_password}" psql -h ${rs_hostname} -d ${rs_database_name} -U ${rs_user} -p 5439 -v schema_name=${rs_schema_name} -v emr_file_path=${emr_file_path} -f ${home_path}/sql/supplier_load_data.sql
