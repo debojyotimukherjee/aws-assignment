@@ -375,7 +375,7 @@ Resources:
       Schedule: cron(0 22 * * ? *)
       StartOnCreation: true
       Actions:
-        - JobName: AWSAssignmentGluePrepareFileJob
+        - JobName: !Ref AWSAssignmentGluePrepareFileJob
           Arguments:
             "--DATA_SOURCE_NAME": "supplier" #To be a non hardcoded value
             "--SOURCE_FILE_TYPE": "parquet"
