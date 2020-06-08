@@ -8,13 +8,14 @@ if [ $# -ne 1 ]; then
 fi
 
 data_source_name=${1}
-rs_hostname="aws-assignment-awsassignmentredshiftcluster-d8z2i899ckcw.cnowfxl3k0d2.us-east-1.redshift.amazonaws.com"
+rs_hostname="emr-redshift-awsassignment.cnowfxl3k0d2.us-east-1.redshift.amazonaws.com"
 rs_user="etl_user"
 rs_schema_name="assignment"
 rs_database_name="aws-assignment"
 secret_id_string="aws-assignment-rs-etl-password"
 rs_password=`aws secretsmanager get-secret-value --secret-id ${secret_id_string} | jq '.SecretString' | sed 's|\\"||g
 ' | awk -F":" '{print $2}' | sed 's|}"||g' | sed 's/^ *//g'`
+
 
 home_path=/home/hadoop/aws-assignment/emr_scripts
 log_dir=/home/hadoop/logs
