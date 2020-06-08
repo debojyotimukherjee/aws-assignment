@@ -30,4 +30,4 @@ echo "Finished Spark Job to create the source files for Redshift Copy at - `date
 #Step - 2 Trigger PSQL Script
 echo "Starting PSQL Script to load the data into Redshift at - `date +"%Y%m%d%H%M%S"`" >> ${log_dir}/"${log_file_name}"
 
-PGPASSWORD=${rs_password} psql -h ${rs_hostname} -d ${rs_database_name} -U ${rs_user} -p 5439 -v schema_name=${rs_schema_name} -f ${home_path}/sql/supplier_load_data.sql
+PGPASSWORD="${rs_password}" psql -h ${rs_hostname} -d ${rs_database_name} -U ${rs_user} -p 5439 -v schema_name=${rs_schema_name} -f ${home_path}/sql/supplier_load_data.sql
