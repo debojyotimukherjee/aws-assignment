@@ -17,7 +17,7 @@ rs_password="$(aws secretsmanager get-secret-value --secret-id ${secret_id_strin
 ' | awk -F":" '{print $2}' | sed 's|}"||g' | sed 's/^ *//g')"
 rs_iam_role="arn:aws:iam::048532184061:role/aws-assignment-redshift-s3-access-role"
 folder_date="$(date +'%Y%m%d')"
-emr_file_path="hdfs:///output_store/${data_source_name}/${folder_date}/"
+emr_file_path="emr://j-35YPEDUMMF9AO/output_store/${data_source_name}/${folder_date}/"
 
 
 home_path=/home/hadoop/aws-assignment/emr_scripts
