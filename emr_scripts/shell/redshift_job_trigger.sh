@@ -16,7 +16,7 @@ secret_id_string="aws-assignment-rs-etl-password"
 rs_password="$(aws secretsmanager get-secret-value --secret-id ${secret_id_string} | jq '.SecretString' | sed 's|\\"||g
 ' | awk -F":" '{print $2}' | sed 's|}"||g' | sed 's/^ *//g')"
 rs_iam_role="arn:aws:iam::048532184061:role/aws-assignment-redshift-s3-access-role"
-folder_date=now="$(date +'%Y%m%d')"
+folder_date="$(date +'%Y%m%d')"
 emr_file_path="hdfs:///output_store/${data_source_name}/${folder_date}/"
 
 
